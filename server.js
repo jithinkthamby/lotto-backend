@@ -4,7 +4,7 @@ import fetch from "node-fetch";
 import sqlite3 from "sqlite3";
 import { open } from "sqlite";
 
-const RAPIDAPI_KEY = "PASTE_YOUR_API_KEY_HERE";
+const RAPIDAPI_KEY = "cb9f880eb0msh44fbd81653f2599p1c0334jsn4e930ea2c8c9";
 
 const app = express();
 app.use(cors());

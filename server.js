@@ -3,7 +3,9 @@ import cors from "cors";
 import fetch from "node-fetch";
 import sqlite3 from "sqlite3";
 import { open } from "sqlite";
-const RAPIDAPI_KEY = "PASTE_YOUR_KEY_HERE";
+
+const RAPIDAPI_KEY = "PASTE_YOUR_API_KEY_HERE";
+
 const app = express();
 app.use(cors());
 
@@ -22,43 +24,59 @@ CREATE TABLE IF NOT EXISTS draws (
 )
 `);
 
-// --- FETCH REAL DATA (replace with working API if needed)
+// --- FETCH REAL DATA (Ontario Lotto Max) ---
 async function fetchLatestResults() {
   const today = new Date().toISOString().split("T")[0];
 
   const url = `https://canada-lottery.p.rapidapi.com/lottomax/results/${today}/regions/ontario`;
 
-  const res = await fetch(url, {
-    method: "GET",
-    headers: {
-      "x-rapidapi-host": "canada-lottery.p.rapidapi.com",
-      "x-rapidapi-key": RAPIDAPI_KEY
-    }
-  });
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        "x-rapidapi-host": "canada-lottery.p.rapidapi.com",
+        "x-rapidapi-key": RAPIDAPI_KEY
+      }
+    });
 
-  const data = await res.json();
+    const data = await res.json();
 
-  return {
-    lottoMax: {
-      numbers: data?.draw?.numbers || [],
-      jackpot: data?.draw?.jackpot || 0,
-      date: today
-    }
-  };
+    return {
+      lottoMax: {
+        numbers: data?.draw?.numbers || [],
+        jackpot: data?.draw?.jackpot || 0,
+        date: today
+      }
+    };
+  } catch (err) {
+    console.log("API ERROR:", err);
+
+    // fallback if API fails
+    return {
+      lottoMax: {
+        numbers: [],
+        jackpot: 0,
+        date: today
+      }
+    };
+  }
 }
-  // Placeholder — you can replace with real API later
-  return {
-    lottoMax: { numbers: [3,11,19,27,34,42,48], jackpot: 50000000 },
-    lotto649: { numbers: [5,12,18,26,33,44], jackpot: 5000000 }
-  };
-}
 
-// --- STORE DATA ---
+// --- STORE DATA (avoid duplicates) ---
 async function storeDraw(game, numbers) {
-  await db.run(
-    "INSERT INTO draws (game, numbers, date) VALUES (?, ?, datetime('now'))",
+  if (!numbers || numbers.length === 0) return;
+
+  const exists = await db.get(
+    "SELECT * FROM draws WHERE game=? AND numbers=?",
     [game, JSON.stringify(numbers)]
   );
+
+  if (!exists) {
+    await db.run(
+      "INSERT INTO draws (game, numbers, date) VALUES (?, ?, datetime('now'))",
+      [game, JSON.stringify(numbers)]
+    );
+  }
 }
 
 // --- LOAD HISTORY ---
@@ -125,22 +143,22 @@ function weightedPick(weights, pickCount) {
     if (!line.includes(pick)) line.push(pick);
   }
 
-  return line.sort((a,b)=>a-b);
+  return line.sort((a, b) => a - b);
 }
 
 // --- GENERATOR ---
 async function generate(game) {
   const config = {
-    max: game === "max" ? 50 : 49,
-    pick: game === "max" ? 7 : 6
+    max: 50,
+    pick: 7
   };
 
-  const history = await getHistory(game);
+  const history = await getHistory("max");
   const weights = buildWeights(history, config.max);
 
   let candidates = [];
 
-  for (let i = 0; i < 30000; i++) {
+  for (let i = 0; i < 20000; i++) {
     let line = weightedPick(weights, config.pick);
 
     let score =
@@ -151,19 +169,20 @@ async function generate(game) {
     candidates.push({ line, score });
   }
 
-  candidates.sort((a,b)=>b.score-a.score);
-  return candidates.slice(0,5);
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates.slice(0, 5);
 }
 
 // --- API ROUTES ---
 
-app.get("/generate/:game", async (req,res)=>{
-  const lines = await generate(req.params.game);
+// Generate smart lines
+app.get("/generate", async (req, res) => {
+  const lines = await generate();
   res.json(lines);
 });
 
-app.get("/results", async (req,res)=>{
-
+// Get results + history
+app.get("/results", async (req, res) => {
   const data = await fetchLatestResults();
 
   await storeDraw("max", data.lottoMax.numbers);
@@ -179,6 +198,6 @@ app.get("/results", async (req,res)=>{
       date: r.date
     }))
   });
-
 });
-app.listen(3001, ()=>console.log("Server running"));
+
+app.listen(3001, () => console.log("Server running on port 3001"));

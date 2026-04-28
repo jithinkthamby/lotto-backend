@@ -3,7 +3,7 @@ import cors from "cors";
 import fetch from "node-fetch";
 import sqlite3 from "sqlite3";
 import { open } from "sqlite";
-
+const RAPIDAPI_KEY = "PASTE_YOUR_KEY_HERE";
 const app = express();
 app.use(cors());
 
@@ -24,6 +24,28 @@ CREATE TABLE IF NOT EXISTS draws (
 
 // --- FETCH REAL DATA (replace with working API if needed)
 async function fetchLatestResults() {
+  const today = new Date().toISOString().split("T")[0];
+
+  const url = `https://canada-lottery.p.rapidapi.com/lottomax/results/${today}/regions/ontario`;
+
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      "x-rapidapi-host": "canada-lottery.p.rapidapi.com",
+      "x-rapidapi-key": RAPIDAPI_KEY
+    }
+  });
+
+  const data = await res.json();
+
+  return {
+    lottoMax: {
+      numbers: data?.draw?.numbers || [],
+      jackpot: data?.draw?.jackpot || 0,
+      date: today
+    }
+  };
+}
   // Placeholder — you can replace with real API later
   return {
     lottoMax: { numbers: [3,11,19,27,34,42,48], jackpot: 50000000 },
@@ -141,13 +163,22 @@ app.get("/generate/:game", async (req,res)=>{
 });
 
 app.get("/results", async (req,res)=>{
+
   const data = await fetchLatestResults();
 
-  // store latest
   await storeDraw("max", data.lottoMax.numbers);
-  await storeDraw("649", data.lotto649.numbers);
 
-  res.json(data);
+  const last5 = await db.all(
+    "SELECT numbers, date FROM draws WHERE game='max' ORDER BY id DESC LIMIT 5"
+  );
+
+  res.json({
+    latest: data.lottoMax,
+    history: last5.map(r => ({
+      numbers: JSON.parse(r.numbers),
+      date: r.date
+    }))
+  });
+
 });
-
 app.listen(3001, ()=>console.log("Server running"));

@@ -184,7 +184,7 @@ app.get("/generate", async (req, res) => {
 // Get results + history
 app.get("/results", async (req, res) => {
   const data = await fetchLatestResults();
-
+console.log("API RESPONSE:", JSON.stringify(data, null, 2));
   await storeDraw("max", data.lottoMax.numbers);
 
   const last5 = await db.all(

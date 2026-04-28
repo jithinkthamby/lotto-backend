@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS draws (
 
 // --- FETCH REAL DATA (Ontario Lotto Max) ---
 async function fetchLatestResults() {
-  const today = new Date().toISOString().split("T")[0];
+  const today = "2026-04-25"; // last Lotto Max draw date
 
   const url = `https://canada-lottery.p.rapidapi.com/lottomax/results/${today}/regions/ontario`;
 
